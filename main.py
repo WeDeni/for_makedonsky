@@ -1,9 +1,45 @@
 from uuid import uuid4
-
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
+
+DATABASE_URL = "postgresql+psycopg://postgres:admin@127.0.0.1:5432/postgres"
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+
+
+class Base(DeclarativeBase):
+    """Базовый класс для всех моделей таблиц БД"""
+    id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid4()))
+
+
+class TaskORM(Base):
+    """Модель для таблицы задачи в Базе Данных"""
+    __tablename__ = "tasks"
+
+    title: Mapped[str]
+    completed: Mapped[bool] = mapped_column(default=False) # по умолчанию False
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+def get_db():
+    """Функция для создания сессий с БД"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
@@ -16,7 +52,6 @@ app.add_middleware(
     allow_headers=['*'],
     allow_credentials=True,
 )
-
 
 class Task(BaseModel):
     '''Модель задачи'''
